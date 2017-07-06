@@ -8,17 +8,14 @@
  *  @copyright 2016 DJI. All rights reserved.
  *
  */
-
-
-
 #include <ros/ros.h>
 #include <stdio.h>
 #include <iostream>
 #include <vector>
 
 #include <dji_sdk/dji_drone.h>
-//#include <dji_sdk_lib/DJI_VirtualRC.h>
-//#include <dji_sdk_lib/DJI_API.h>
+//#include <opencv/Center.h>
+//#include "zy.h"
 
 #include <cstdlib>
 #include <stdlib.h>
@@ -26,141 +23,67 @@
 #include <actionlib/client/terminal_state.h>
 
 using namespace DJI::onboardSDK;
-//extern RCChannels RC;
-//VirtualRC virtualrc = VirtualRC(coreApi);
-//RadioData RC;
-
-//! Function Prototypes for Mobile command callbacks - Core Functions
-/*void ObtainControlMobileCallback(DJIDrone *drone);
-void ReleaseControlMobileCallback(DJIDrone *drone);
-void TakeOffMobileCallback(DJIDrone *drone);
-void LandingMobileCallback(DJIDrone *drone);
-void GetSDKVersionMobileCallback(DJIDrone *drone);
-void ArmMobileCallback(DJIDrone *drone);
-void DisarmMobileCallback(DJIDrone *drone);
-void GoHomeMobileCallback(DJIDrone *drone);
-void TakePhotoMobileCallback(DJIDrone *drone);
-void StartVideoMobileCallback(DJIDrone *drone);
-void StopVideoMobileCallback(DJIDrone *drone);
-//! Function Prototypes for Mobile command callbacks - Custom Missions
-void DrawCircleDemoMobileCallback(DJIDrone *drone);
-void DrawSquareDemoMobileCallback(DJIDrone *drone);
-void GimbalControlDemoMobileCallback(DJIDrone *drone);
-void AttitudeControlDemoMobileCallback(DJIDrone *drone);
-void LocalNavigationTestMobileCallback(DJIDrone *drone);
-void GlobalNavigationTestMobileCallback(DJIDrone *drone);
-void WaypointNavigationTestMobileCallback(DJIDrone *drone);
-void VirtuaRCTestMobileCallback(DJIDrone *drone);
-
-//! For LAS logging
-void StartMapLASLoggingMobileCallback(DJIDrone *drone);
-void StopMapLASLoggingMobileCallback(DJIDrone *drone);
-void StartCollisionAvoidanceCallback(DJIDrone *drone);
-void StopCollisionAvoidanceCallback(DJIDrone *drone);
-*/
-
+using namespace std;
 static void Display_Main_Menu(void)
 {
-/*    printf("\r\n");
-    printf("+-------------------------- < Main menu > ------------------------+\n");
-	printf("| [1]  SDK Version Query        | [20] Set Sync Flag Test          |\n");
-	printf("| [2]  Request Control          | [21] Set Msg Frequency Test      |\n");	
-	printf("| [3]  Release Control          | [22] Waypoint Mission Upload     |\n");	
-	printf("| [4]  Takeoff                  | [23] Hotpoint Mission Upload     |\n");	
-	printf("| [5]  Landing                  | [24] Followme Mission Upload     |\n");	
-	printf("| [6]  Go Home                  | [25] Mission Start               |\n");	
-	printf("| [7]  Gimbal Control Sample    | [26] Mission Pause               |\n");	
-	printf("| [8]  Attitude Control Sample  | [27] Mission Resume              |\n");	
-	printf("| [9]  Draw Circle Sample       | [28] Mission Cancel              |\n");	
-	printf("| [10] Draw Square Sample       | [29] Mission Waypoint Download   |\n");	
-	printf("| [11] Take a Picture           | [30] Mission Waypoint Set Speed  |\n");	
-	printf("| [12] Start Record Video       | [31] Mission Waypoint Get Speed  |\n");	 
-	printf("| [13] Stop Record Video        | [32] Mission Hotpoint Set Speed  |\n");	
-	printf("| [14] Local Navigation Test    | [33] Mission Hotpoint Set Radius |\n");	
-	printf("| [15] Global Navigation Test   | [34] Mission Hotpoint Reset Yaw  |\n");	
-	printf("| [16] Waypoint Navigation Test | [35] Mission Followme Set Target |\n");	
-	printf("| [17] Arm the Drone            | [36] Mission Hotpoint Download   |\n");	
-    printf("| [18] Disarm the Drone         | [37] Enter Mobile commands mode  |\n");
-    printf("| [19] Virtual RC Test           \n");
-    printf("+-----------------------------------------------------------------+\n");
-    printf("input 1/2/3 etc..then press enter key\r\n");
-    printf("use `rostopic echo` to query drone status\r\n");
-    printf("----------------------------------------\r\n");
-*/
 }
+static float error_x = 0,last_error_x = 0,error_y = 0,last_error_y = 0,I_error_x = 0,I_error_y = 0;
+static float Kp_x = 1.0,Ki_x = 0,Kd_x = 0;
+static float Kp_y = 1.0,Ki_y = 0,Kd_y = 0;
+//static int only_once = 0; 
+// CvCapture* capture = cvCreateCameraCapture(0);
+    //CvCapture* capture = cvCreateFileCapture("test5.mp4");
+// IplImage* img;
+// CvBox2D dt;
 
-   
+pair<float,float> PID(float x,float y)
+{
+    float p = 0,q = 0;
+    pair<float,float> error(0.0,0.0);
+    error_x = 320-x;
+    error_y = y-240;
+    I_error_x += error_x;
+    I_error_y += error_y;
+    p = Kp_x * error_x + Ki_x * I_error_x + Kd_x * (error_x - last_error_x);
+    q = Kp_y * error_y + Ki_y * I_error_y + Kd_y * (error_y - last_error_y);
+    last_error_x = error_x;
+    last_error_y = error_y;
+    error.first = q/640; 
+    error.second = p/640; 
+    return error;
+}
+//opencv::Center center;
+
 int main(int argc, char *argv[])
 {
-
+//    CvBox2D result;
+//    int framecnt = 0;
+    float x = 0,y = 0,p = 0,q = 0;
+//    result.center.x = 0;
+//    result.center.y = 0;
     int once = 0;
-    int main_operate_code = 0;
-    int temp32;
-    int circleRadius;
-    int circleHeight;
-    float Phi, circleRadiusIncrements;
-    int x_center, y_center, yaw_local;
-    bool valid_flag = false;
-    bool err_flag = false;
+    pair<float,float> error(0.0,0.0);
+ //   CvCapture* capture = cvCreateCameraCapture(0);
     ros::init(argc, argv, "sdk_client");
     ROS_INFO("sdk_service_client_test");
     ros::NodeHandle nh;
     DJIDrone* drone = new DJIDrone(nh);
+   
+ //   image_processing Center;
 
 	//virtual RC test data
 	uint32_t virtual_rc_data[16];
 
 	//set frequency test data
 	uint8_t msg_frequency_data[16] = {1,2,3,4,3,2,1,2,3,4,3,2,1,2,3,4};
-	//waypoint action test data
-    dji_sdk::WaypointList newWaypointList;
-    dji_sdk::Waypoint waypoint0;
-    dji_sdk::Waypoint waypoint1;
-    dji_sdk::Waypoint waypoint2;
-    dji_sdk::Waypoint waypoint3;
-    dji_sdk::Waypoint waypoint4;
 
-	//groundstation test data
-	dji_sdk::MissionWaypointTask waypoint_task;
-	dji_sdk::MissionWaypoint 	 waypoint;
-	dji_sdk::MissionHotpointTask hotpoint_task;
-	dji_sdk::MissionFollowmeTask followme_task;
-	dji_sdk::MissionFollowmeTarget followme_target;
-	
+
 	dji_sdk::RCChannels rc_channels;
+    opencv::Center center;
+
 
     uint8_t userData = 0;
-  //  ros::spinOnce();
-    
-    //! Setting functions to be called for Mobile App Commands mode 
-//   drone->setObtainControlMobileCallback(ObtainControlMobileCallback, &userData);
-  //  drone->setReleaseControlMobileCallback(ReleaseControlMobileCallback, &userData);
- //   drone->setTakeOffMobileCallback(TakeOffMobileCallback, &userData);
- //   drone->setLandingMobileCallback(LandingMobileCallback, &userData);
- //   drone->setGetSDKVersionMobileCallback(GetSDKVersionMobileCallback, &userData);
- //   drone->setArmMobileCallback(ArmMobileCallback, &userData);
- //   drone->setDisarmMobileCallback(DisarmMobileCallback, &userData);
- //   drone->setGoHomeMobileCallback(GoHomeMobileCallback, &userData);
-//    drone->setTakePhotoMobileCallback(TakePhotoMobileCallback, &userData);
-  //  drone->setStartVideoMobileCallback(StartVideoMobileCallback,&userData);
- //   drone->setStopVideoMobileCallback(StopVideoMobileCallback,&userData);
-   // drone->setDrawCircleDemoMobileCallback(DrawCircleDemoMobileCallback, &userData);
-  //  drone->setDrawSquareDemoMobileCallback(DrawSquareDemoMobileCallback, &userData);
- //   drone->setGimbalControlDemoMobileCallback(GimbalControlDemoMobileCallback, &userData);
-  //  drone->setAttitudeControlDemoMobileCallback(AttitudeControlDemoMobileCallback, &userData);
-  //  drone->setLocalNavigationTestMobileCallback(LocalNavigationTestMobileCallback, &userData);
-//    drone->setGlobalNavigationTestMobileCallback(GlobalNavigationTestMobileCallback, &userData);
-  //  drone->setWaypointNavigationTestMobileCallback(WaypointNavigationTestMobileCallback, &userData);
-   // drone->setVirtuaRCTestMobileCallback(VirtuaRCTestMobileCallback, &userData);
-
-  //  drone->setStartMapLASLoggingMobileCallback(StartMapLASLoggingMobileCallback, &userData);
-  //  drone->setStopMapLASLoggingMobileCallback(StopMapLASLoggingMobileCallback, &userData);
-  //  drone->setStartCollisionAvoidanceCallback(StartCollisionAvoidanceCallback, &userData);
-  //  drone->setStopCollisionAvoidanceCallback(StopCollisionAvoidanceCallback, &userData);
-
-
-//    Display_Main_Menu();
-    while(1)
+    while(ros::ok())
     {
         once = 0;
         ros::spinOnce();
@@ -172,52 +95,67 @@ int main(int argc, char *argv[])
             std::cout << "Invalid input.  Try again: ";
      	}
 */
-//      RC=virtualrc.getRCData();
-//	rc_channels_subscriber_callback();
-//	std::cout <<"mode="<<RC.mode<<std::endl;
+ //    result = Center.center(framecnt,capture);
 
-     std::cout <<"mode     = "<<drone->rc_channels.mode<<std::endl;
-	 std::cout <<"pitch    = "<<drone->rc_channels.pitch<<std::endl;
-	 std::cout <<"roll     = "<<drone->rc_channels.roll<<std::endl;
-	 std::cout <<"yaw      = "<<drone->rc_channels.yaw<<std::endl;
- 	 std::cout <<"throttle = "<<drone->rc_channels.throttle<<std::endl;
-	 std::cout <<"gear     = "<<drone->rc_channels.gear<<std::endl;
+     cout <<"mode     = "<<drone->rc_channels.mode<<std::endl;
+	 cout <<"pitch    = "<<drone->rc_channels.pitch<<std::endl;
+	 cout <<"roll     = "<<drone->rc_channels.roll<<std::endl;
+	 cout <<"yaw      = "<<drone->rc_channels.yaw<<std::endl;
+ 	 cout <<"throttle = "<<drone->rc_channels.throttle<<std::endl;
+	 cout <<"gear     = "<<drone->rc_channels.gear<<std::endl;
+     cout <<"center.x = "<<drone->center.x<<endl;
+     cout <<"center.y = "<<drone->center.y<<endl;
 
 	while(drone->rc_channels.mode == 8000)
 	{
         ros::spinOnce();
-        std::cout <<"enter F mode\r\n"<<std::endl;
+        std::cout <<"enter F mode"<<std::endl;
+   //     result = Center.center(framecnt,capture);
+    //    cout <<"center.x = "<<result.center.x<<endl;
+   //     cout <<"center.y = "<<result.center.y<<endl;
 	    if(once == 0)
 	  	{
 			once = 1;
 			drone->request_sdk_permission_control();
 		}
-		if(drone->rc_channels.pitch > 150)
+        x = drone->center.x;
+        y = drone->center.y;
+        cout<<"center.x = "<<x<<endl;
+        cout<<"center.y = "<<y<<endl;
+        error = PID(x,y);
+        cout<<"error.first  = "<<error.first<<endl;
+        cout<<"error.second = "<<error.second<<endl;
+        if(abs(x-320)<64 && abs(y-240)<64)
+        {
+            drone->attitude_control(0x4B, 0, 0, 0, 0);
+            usleep(200000);
+        }
+       drone->attitude_control(0x4B, error.first, error.second, 0, 0);
+        usleep(20000);
+
+	/*	if(drone->rc_channels.pitch > 150)
 		{
 		    for(int i = 0; i < 100; i ++)
             {
                 if(i < 90)
-                    drone->attitude_control(0x4B, 2, 0, 0, 0);
+                    drone->attitude_control(0x4B, 0, 0.5, 0, 0);
                 else
                     drone->attitude_control(0x4B, 0, 0, 0, 0);
                 usleep(20000);
             }
             sleep(1);
 
-		}	
+		}	*/
+    }
+    if(once == 1)
+    {
+        drone->release_sdk_permission_control();
+        once = 0;
+        I_error_x = 0;
+        I_error_y = 0;
+  //     only_once = 0;
     }
     
-/*        if(temp32>0 && temp32<38)
-        {
-            main_operate_code = temp32;         
-        }
-        else
-        {
-            printf("ERROR - Out of range Input \n");
-            Display_Main_Menu();
-            continue;
-        }
-*/	
 	
 /*        switch(main_operate_code)
         {
@@ -863,10 +801,10 @@ int main(int argc, char *argv[])
         }
 
     }*/
-    void DrawSquareDemoMobileCallback(DJIDrone *drone)
-    {
+//    void DrawSquareDemoMobileCallback(DJIDrone *drone)
+//    {
     /*draw square sample*/
-        for(int i = 0;i < 60;i++)
+/*        for(int i = 0;i < 60;i++)
         {
             drone->attitude_control( Flight::HorizontalLogic::HORIZONTAL_POSITION |
             Flight::VerticalLogic::VERTICAL_VELOCITY |
@@ -938,9 +876,9 @@ int main(int argc, char *argv[])
         }
 
     void AttitudeControlDemoMobileCallback(DJIDrone *drone)
-    {
+    {*/
         /* attitude control sample*/
-        drone->takeoff();
+/*        drone->takeoff();
         sleep(8);
 
 
@@ -1097,7 +1035,7 @@ void StopMapLASLoggingMobileCallback(DJIDrone *drone)
 {
   system("rosnode kill /write_LAS /scanRegistration /laserMapping /transformMaintenance /laserOdometry  &");
 }
-
+*/
 void StartCollisionAvoidanceCallback(DJIDrone *drone)
 { 
   uint8_t freq[16];

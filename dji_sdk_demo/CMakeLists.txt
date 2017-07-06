@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   dji_sdk
   dji_sdk_lib
 )
+find_package(OpenCV REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -139,10 +140,14 @@ include_directories(
 # target_link_libraries(dji_sdk_demo_node
 #   ${catkin_LIBRARIES}
 # )
-add_executable(dji_sdk_client src/client.cpp)
+add_executable(dji_sdk_client src/client.cpp
+src/zy.h
+src/zy.cpp 
+src/detection.cpp)
 target_link_libraries(dji_sdk_client
   ${catkin_LIBRARIES}
 )
+target_link_libraries(dji_sdk_client ${OpenCV_LIBS})
 #add_dependencies(dji_sdk_client dji_sdk_generate_messages_cpp)
 
 #add_executable(dji_sdk_lib src/DJI_VirtualRC.cpp)
