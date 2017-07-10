@@ -1,0 +1,111 @@
+#include "ros/ros.h"
+#include "std_msgs/String.h"
+#include <opencv/Center.h>
+
+#include <stdlib.h>
+#include <cv.h>
+#include <highgui.h>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+
+#include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/image_encodings.h>
+
+#include <opencv2/opencv.hpp>
+
+
+#include <stdio.h>
+#include <math.h>
+#include <string.h>
+#include <vector>
+#include <iostream>
+
+ros::Subscriber left_image_sub;
+
+using namespace std;
+using namespace cv;
+
+#define WIDTH 320
+#define HEIGHT 240
+
+Mat vedio;
+
+ /* left greyscale image */
+ void left_image_callback(const sensor_msgs::ImageConstPtr& left_img)
+ {
+     cv_bridge::CvImagePtr cv_ptr;
+     try {
+          cv_ptr = cv_bridge::toCvCopy(left_img, sensor_msgs::image_encodings::MONO8);
+     }
+     catch (cv_bridge::Exception& e) {
+         ROS_ERROR("cv_bridge exception: %s", e.what());
+         return;
+     }
+ 
+     cv::imshow("left_image", cv_ptr->image);
+     vedio = cv_ptr->image;
+     cv::waitKey(1);
+ }
+
+int main(int argc,char **argv)
+{
+    Mat src_gray;
+    opencv::Center center_1; 
+    ros::init(argc,argv,"opencv");
+    ros::NodeHandle n;
+    left_image_sub = n.subscribe("/guidance/left_image",  10, left_image_callback);
+    ros::Publisher chatter_pub = n.advertise<opencv::Center>("chatter",10);
+	while (ros::ok())
+	{
+		ros::spinOnce();
+		//****************************************************************************	
+        src_gray = vedio;
+	/// Read the image
+	if (!src_gray.data) continue;
+
+	/// Reduce the noise so we avoid false circle detection
+	GaussianBlur(src_gray, src_gray, Size(9, 9), 2, 2);
+
+	vector<Vec3f> circles;
+
+	/// Apply the Hough Transform to find the circles
+	HoughCircles(src_gray, circles, CV_HOUGH_GRADIENT, 1, src_gray.rows / 8, 200, 50, 0, 0);
+
+	/// find the max circle
+	int max_radius=0;
+	int max_idx=-1;
+	for (size_t i = 0; i < circles.size(); i++)
+	{
+		int radius = cvRound(circles[i][2]);
+		if(radius > max_radius) {
+			max_radius = radius;
+			max_idx=i;
+		}
+	}
+
+	if(max_idx == -1) continue;
+	else {
+		/// Draw the circles detected
+		Point center(cvRound(circles[max_idx][0]), cvRound(circles[max_idx][1]));
+		int radius = cvRound(circles[max_idx][2]);
+		// circle center
+    		circle(src_gray, center, 3, Scalar(255), -1, 8, 0);
+		// circle outline
+		circle(src_gray, center, radius, Scalar(255), 3, 8, 0);
+	
+		///return the circle
+		center_1.x = center.x;
+		center_1.y = center.y;
+		chatter_pub.publish(center_1);
+	}
+
+	/// Show your results
+	namedWindow("Hough Circle Transform Demo", CV_WINDOW_AUTOSIZE);
+	imshow("Hough Circle Transform Demo", src_gray);
+
+	waitKey(1);
+//************************************************************************************
+    }	
+	return 0;
+}

@@ -1,0 +1,51 @@
+cmake_minimum_required(VERSION 2.8.3)
+project(opencv)
+
+
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  cv_bridge
+  sensor_msgs
+  geometry_msgs
+  rospy
+  std_msgs
+  message_generation
+)
+
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
+
+find_package(OpenCV REQUIRED)
+
+ add_message_files(
+   FILES
+   Center.msg
+ )
+
+ generate_messages(
+#   DEPENDENCIES
+#   std_msgs  # Or other packages containing msgs
+ )
+
+
+catkin_package(
+  INCLUDE_DIRS include
+  LIBRARIES opencv
+  CATKIN_DEPENDS roscpp rospy std_msg message_runtime
+  DEPENDS system_lib
+)
+
+include_directories(
+  ${OpenCV_INCLUDE_DIRS}
+  ${catkin_INCLUDE_DIRS}
+  include
+)
+
+
+add_executable(opencv src/main.cpp
+
+)
+target_link_libraries(opencv ${OpenCV_LIBS})
+
+target_link_libraries(opencv ${catkin_LIBRARIES})
