@@ -15,42 +15,19 @@
 
 #include <dji_sdk/dji_drone.h>
 
-#include <sensor_msgs/LaserScan.h> //obstacle distance && ultrasonic
-
 #include <cstdlib>
 #include <stdlib.h>
 #include <actionlib/client/simple_action_client.h>
 #include <actionlib/client/terminal_state.h>
 
-
-ros::Subscriber ultrasonic_sub;
-
 using namespace DJI::onboardSDK;
 using namespace std;
-
-float ul = 0;      //ultrasonic data
-int reliablity = 0;
-/* ultrasonic */
-void ultrasonic_callback(const sensor_msgs::LaserScan& g_ul)
-{
-     printf( "frame_id: %s stamp: %d\n", g_ul.header.frame_id.c_str(), g_ul.header.stamp.sec );
-    if((int)g_ul.intensities[0] == 1)
-    {
-        ul = g_ul.ranges[0];
-        reliablity =  g_ul.intensities[0];
-    }
-//    g_ul_data.ranges[0] = g_ul.ranges[0];
-//    g_ul_data.intensities[0] =  g_ul.intensities[0];
-        printf( "ultrasonic distance: [%f]  reliability: [%d]\n", g_ul.ranges[0], (int)g_ul.intensities[0] );
-}
-
-
 static void Display_Main_Menu(void)
 {
 }
-static float error_x =0,last_error_x = 0,error_y = 0,last_error_y = 0,I_error_x = 0,I_error_y = 0;
-static float Kp_x = 0.3,Ki_x = 0,Kd_x = 0;
-static float Kp_y = 0.3,Ki_y = 0,Kd_y = 0;
+static float error_x = 0,last_error_x = 0,error_y = 0,last_error_y = 0,I_error_x = 0,I_error_y = 0;
+static float Kp_x = 1.0,Ki_x = 0,Kd_x = 0;
+static float Kp_y = 1.0,Ki_y = 0,Kd_y = 0;
 
 pair<float,float> PID(float x,float y)
 {
@@ -78,8 +55,7 @@ int main(int argc, char *argv[])
     ROS_INFO("sdk_service_client_test");
     ros::NodeHandle nh;
     DJIDrone* drone = new DJIDrone(nh);
- 
-    ultrasonic_sub = nh.subscribe("/guidance/ultrasonic", 10, ultrasonic_callback);
+   
 
 	//virtual RC test data
 	uint32_t virtual_rc_data[16];
@@ -88,11 +64,9 @@ int main(int argc, char *argv[])
 	uint8_t msg_frequency_data[16] = {1,2,3,4,3,2,1,2,3,4,3,2,1,2,3,4};
 
 
-//	dji_sdk::RCChannels rc_channels;
-//    opencv::Center center;
-//    center.x = 160;
-//    center.y = 120;
-//    sensor_msgs::LaserScan g_ul;
+	dji_sdk::RCChannels rc_channels;
+    opencv::Center center;
+
 
     uint8_t userData = 0;
     while(ros::ok())
@@ -100,14 +74,14 @@ int main(int argc, char *argv[])
         once = 0;
         ros::spinOnce();
 
-     cout <<"mode        = "<<drone->rc_channels.mode<<std::endl;
-	 cout <<"pitch       = "<<drone->rc_channels.pitch<<std::endl;
-	 cout <<"roll        = "<<drone->rc_channels.roll<<std::endl;
-	 cout <<"yaw         = "<<drone->rc_channels.yaw<<std::endl;
- 	 cout <<"throttle    = "<<drone->rc_channels.throttle<<std::endl;
-	 cout <<"gear        = "<<drone->rc_channels.gear<<std::endl;
-     cout <<"center(x,y) = "<<drone->center.x<<", "<<drone->center.y<<endl;
-     cout <<"ultrasonic distiance: "<<ul<<" reliability: "<<reliablity<<endl;
+     cout <<"mode     = "<<drone->rc_channels.mode<<std::endl;
+	 cout <<"pitch    = "<<drone->rc_channels.pitch<<std::endl;
+	 cout <<"roll     = "<<drone->rc_channels.roll<<std::endl;
+	 cout <<"yaw      = "<<drone->rc_channels.yaw<<std::endl;
+ 	 cout <<"throttle = "<<drone->rc_channels.throttle<<std::endl;
+	 cout <<"gear     = "<<drone->rc_channels.gear<<std::endl;
+     cout <<"center.x = "<<drone->center.x<<endl;
+     cout <<"center.y = "<<drone->center.y<<endl;
 
 	while(drone->rc_channels.mode == 8000)
     {
@@ -136,18 +110,11 @@ int main(int argc, char *argv[])
         }
         cout<<"error.first  = "<<error.first<<endl;
         cout<<"error.second = "<<error.second<<endl;
-        
-
-        if(ul>0.05 && ul<0.16)
-        {
-            drone->attitude_control(0x4B, 0, 0, -0.4, 0);
-            usleep(20000);
-        }        
-        if(abs(x-160) < 25 && abs(y-120) < 25)
+        if(abs(x-160)<32 && abs(y-120)<32)
         {
         //    drone->attitude_control(0x4B, 0, 0, 0, 0);
         //    usleep(200000);
-	    drone->attitude_control(0x4B, 0, 0, -0.4, 0);
+	    drone->attitude_control(0x4B, 0, 0, 0.5, 0);
 	    usleep(20000);
         }
         else
@@ -157,7 +124,7 @@ int main(int argc, char *argv[])
         }
 /*	if(drone->rc_channels.pitch > 150)
 		{
-	    for(int i = 0; i < 100; i ++)
+		    for(int i = 0; i < 100; i ++)
             {
                 if(i < 90)
                     drone->attitude_control(0x4B, 0.5, 0, 0, 0);

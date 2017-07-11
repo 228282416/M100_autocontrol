@@ -140,10 +140,7 @@ include_directories(
 # target_link_libraries(dji_sdk_demo_node
 #   ${catkin_LIBRARIES}
 # )
-add_executable(dji_sdk_client src/client.cpp
-src/zy.h
-src/zy.cpp 
-src/detection.cpp)
+add_executable(dji_sdk_client src/client.cpp)
 target_link_libraries(dji_sdk_client
   ${catkin_LIBRARIES}
 )
