@@ -7,110 +7,119 @@
 #include <highgui.h>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+
+#include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/image_encodings.h>
+
+#include <opencv2/opencv.hpp>
+
+
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
 #include <vector>
 #include <iostream>
 
+ros::Subscriber left_image_sub;
+
 using namespace std;
 using namespace cv;
 
-const int Follow_Flag = 10;
-const double delta = 40;
-//struct Center
-//{
-//    double x = 0;
-//    double y = 0;
-//}z_center;
+#define WIDTH 320
+#define HEIGHT 240
 
-CvBox2D detection(IplImage* img);
+Mat vedio_img;
+
+ /* left greyscale image */
+ void left_image_callback(const sensor_msgs::ImageConstPtr& left_img)
+ {
+     cv_bridge::CvImagePtr cv_ptr;
+     try {
+          cv_ptr = cv_bridge::toCvCopy(left_img, sensor_msgs::image_encodings::MONO8);
+     }
+     catch (cv_bridge::Exception& e) {
+         ROS_ERROR("cv_bridge exception: %s", e.what());
+         return;
+     }
+
+     vedio_img = cv_ptr->image;
+//     cv::imshow("left_image", cv_ptr->image);
+//     cv::waitKey(1);
+ }
 
 int main(int argc,char **argv)
 {
-	CvCapture* capture = cvCreateCameraCapture(0);
-	//CvCapture* capture = cvCreateFileCapture("test5.mp4");
-	IplImage* img;
-	int framecnt = 0;//识别到的帧数，大于Follow_Flag时进入跟随模式
-	CvBox2D dt;
-	Mat img0;
+    Mat src_gray;
     opencv::Center center_1; 
+//*****************************
+    center_1.x = -1;
+    center_1.y = -1;
+//*******************************
     ros::init(argc,argv,"opencv");
     ros::NodeHandle n;
+    left_image_sub = n.subscribe("/guidance/left_image",  10, left_image_callback);
     ros::Publisher chatter_pub = n.advertise<opencv::Center>("chatter",10);
 	while (ros::ok())
 	{
-			img = cvQueryFrame(capture);
-			if (!img)
-			{
-				printf("ljyshadiao!\n");
-				break;
-			}
+		ros::spinOnce();
+//****************************************************************************	
+        src_gray = vedio_img;
+	/// Read the image
+	if (!src_gray.data) continue;
+	/// Reduce the noise so we avoid false circle detection
+	GaussianBlur(src_gray, src_gray, Size(9, 9), 2, 2);
 
-			CvBox2D result;
-			if (framecnt >= Follow_Flag)
-			{
-				double kx = dt.center.x - dt.size.height / 2 - delta / 2;
-				double ky = dt.center.y - dt.size.width / 2 - delta / 2;
-				if (kx < 0) kx = 0;
-				if (ky < 0) ky = 0;
-				
-				cout <<"kx : "<<kx<<endl;
-				cout <<"ky : "<<ky<<endl;
-				cout <<"height : "<<dt.size.height + delta<<endl;
-				cout <<"width"<<dt.size.width<<endl;
-				
-				cvSetImageROI(img, cvRect(kx, ky, dt.size.height + delta, dt.size.width + delta));//设置感兴趣区域
-				IplImage *img2 = cvCreateImage(cvGetSize(img), img->depth, img->nChannels);//创建一个新的用来显示局部
-				cvCopy(img, img2, NULL);
-				cvResetImageROI(img);
+	vector<Vec3f> circles;
 
-				result = detection(img2);
-				cvReleaseImage(&img2);
-				if (result.center.x == -1 && result.center.y == -1)
-				{
-					result = detection(img);
-					dt = result;
-					framecnt = 1;
-				}
-				else{
-					result.center.x += kx;
-					result.center.y += ky;
-					dt = result;
-					framecnt = 11;
-				}
-			}
-			else{
-				result = detection(img);
-				double dx = dt.center.x;
-				double dy = dt.center.y;
-				double t = abs(dx - result.center.x) + abs(dy - result.center.y);//与上一帧图像做比较
-				if ((result.center.x == -1 && result.center.y == -1) || t > delta)
-				{
-					framecnt = 1;
-				}
-				else framecnt++;
-				dt = result;
-			}
-			//cout << framecnt << endl;
-			//cout << result.center.x << ' ' << result.center.y << endl;
-			
+	/// Apply the Hough Transform to find the circles
+	HoughCircles(src_gray, circles, CV_HOUGH_GRADIENT, 1, src_gray.rows / 8, 200, 50, 0, 0);
 
-			if (result.center.x != -1 && result.center.y != -1)
-			{
-       		    center_1.x = result.center.x;
-       		    center_1.y = result.center.y;
-       		    chatter_pub.publish(center_1);
-           	    ros::spinOnce();
-				printf("( %lf , %lf )\n",center_1.x, center_1.y);
-				//TarmacSend(result.center.x, result.center.y);
-				//cvCircle(&img, Point(result.center.x, result.center.y), 2, CV_RGB(0, 255, 255), 10, 8, 0);
-			}
-
-           
-			cvShowImage("djshffdsssszss", img);
-			cvWaitKey(30);
+	/// find the max circle
+	int max_radius=0;
+	int max_idx=-1;
+	for (size_t i = 0; i < circles.size(); i++)
+	{
+		int radius = cvRound(circles[i][2]);
+		if(radius > max_radius) {
+			max_radius = radius;
+			max_idx=i;
+		}
 	}
-	system("pause");
+
+	if(max_idx == -1)continue;
+/*    {
+         center_1.x = -1;
+         center_1.y = -1;
+         chatter_pub.publish(center_1);
+         cout<<"center.x = "<<center_1.x<<endl;
+         cout<<"center.y = "<<center_1.y<<endl;
+
+    }*/
+	else {
+		/// Draw the circles detected
+		Point center(cvRound(circles[max_idx][0]), cvRound(circles[max_idx][1]));
+		int radius = cvRound(circles[max_idx][2]);
+		// circle center
+    		circle(src_gray, center, 3, Scalar(255), -1, 8, 0);
+		// circle outline
+		circle(src_gray, center, radius, Scalar(255), 3, 8, 0);
+
+		///return the circle
+		center_1.x = center.x;
+		center_1.y = center.y;
+		chatter_pub.publish(center_1);
+        cout<<"center.x = "<<center_1.x<<endl;
+        cout<<"center.y = "<<center_1.y<<endl;
+	}
+
+	/// Show your results
+//    namedWindow("Hough Circle Transform Demo", CV_WINDOW_AUTOSIZE);
+//	imshow("Hough Circle Transform Demo", src_gray);
+//    waitKey(1);
+//************************************************************************************
+    }	
 	return 0;
 }
+
+
