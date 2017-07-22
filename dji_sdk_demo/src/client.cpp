@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <vector>
+//#include <time.h>
 
 #include <dji_sdk/dji_drone.h>
 
@@ -21,14 +22,14 @@
 #include <stdlib.h>
 #include <actionlib/client/simple_action_client.h>
 #include <actionlib/client/terminal_state.h>
-
+#include "send.h"
 
 ros::Subscriber ultrasonic_sub;
 
 using namespace DJI::onboardSDK;
 using namespace std;
 
-float ul = 0;      //ultrasonic data
+float ul = 0.0;      //ultrasonic data
 int reliablity = 0;
 /* ultrasonic */
 void ultrasonic_callback(const sensor_msgs::LaserScan& g_ul)
@@ -44,20 +45,16 @@ void ultrasonic_callback(const sensor_msgs::LaserScan& g_ul)
         printf( "ultrasonic distance: [%f]  reliability: [%d]\n", g_ul.ranges[0], (int)g_ul.intensities[0] );
 }
 
-
-static void Display_Main_Menu(void)
-{
-}
 static float error_x =0,last_error_x = 0,error_y = 0,last_error_y = 0,I_error_x = 0,I_error_y = 0;
-static float Kp_x = 0.3,Ki_x = 0,Kd_x = 0;
-static float Kp_y = 0.3,Ki_y = 0,Kd_y = 0;
-
+static float Kp_x = 0.8,Ki_x = 0,Kd_x = 0;
+static float Kp_y = 0.7,Ki_y = 0,Kd_y = 0;
+         
 pair<float,float> PID(float x,float y)
 {
     float p = 0,q = 0;
     pair<float,float> error(0.0,0.0);
-    error_x = x-160;
-    error_y = 120-y;
+    error_x = x-175;
+    error_y = 125-y;
     I_error_x += error_x;
     I_error_y += error_y;
     p = Kp_x * error_x + Ki_x * I_error_x + Kd_x * (error_x - last_error_x);
@@ -73,6 +70,7 @@ int main(int argc, char *argv[])
 {
     float x = 0,y = 0,p = 0,q = 0;
     int once = 0;
+    int once_1 = 0;
     pair<float,float> error(0.0,0.0);
     ros::init(argc, argv, "sdk_client");
     ROS_INFO("sdk_service_client_test");
@@ -108,19 +106,53 @@ int main(int argc, char *argv[])
 	 cout <<"gear        = "<<drone->rc_channels.gear<<std::endl;
      cout <<"center(x,y) = "<<drone->center.x<<", "<<drone->center.y<<endl;
      cout <<"ultrasonic distiance: "<<ul<<" reliability: "<<reliablity<<endl;
+    drone->center.x = 0;
+    drone->center.y = 0;
+    while(drone->rc_channels.gear == -4545)
+    {
+        ros::spinOnce();
+        if(drone->rc_channels.mode == 8000)
+        {
+            Send(1,0,0,0,0);
+            usleep(20000);
+        }
+        else
+        {
+            Send(0,0,0,0,0);
+            usleep(20000);
+        }
+    }
 
-	while(drone->rc_channels.mode == 8000)
+/*    while(drone->rc_channels.mode == 0)
+    {
+        ros::spinOnce();
+        if(drone->rc_channels.pitch > 200)
+        {
+            Send(0,1,0,0,1);
+        }
+    }
+*/  
+//    Send(0,0,0,1,1);
+//     printf("1 1 1 1 1\n");
+    	while(drone->rc_channels.mode == 8000 && drone->rc_channels.gear == -10000)
+
     {
         ros::spinOnce();
         std::cout <<"enter F mode"<<std::endl;
-   //     result = Center.center(framecnt,capture);
-    //    cout <<"center.x = "<<result.center.x<<endl;
-   //     cout <<"center.y = "<<result.center.y<<endl;
+        
 	    if(once == 0)
 	  	{
 			once = 1;
 			drone->request_sdk_permission_control();
 		}
+
+       if(drone->center.x == -1 && drone->center.y == -1)
+        {
+            Send(0,1,0,0,0);
+          //   drone->attitude_control(0x4B, 0, 0, 0.2, 0);
+             usleep(20000);
+        }
+        else{
         x = drone->center.x;
         y = drone->center.y;
         cout<<"center.x = "<<x<<endl;
@@ -136,24 +168,32 @@ int main(int argc, char *argv[])
         }
         cout<<"error.first  = "<<error.first<<endl;
         cout<<"error.second = "<<error.second<<endl;
-        
-
-        if(ul>0.05 && ul<0.16)
+       
+        if(ul>0.1 && ul<0.40)
         {
-            drone->attitude_control(0x4B, 0, 0, -0.4, 0);
+            drone->attitude_control(0x4B, 0, 0, -0.44, 0);
             usleep(20000);
+        //    Send(0,1,1,1,);         
         }        
-        if(abs(x-160) < 25 && abs(y-120) < 25)
+        else if((x-180) < 25 && abs(y-120) < 25)
         {
         //    drone->attitude_control(0x4B, 0, 0, 0, 0);
         //    usleep(200000);
-	    drone->attitude_control(0x4B, 0, 0, -0.4, 0);
-	    usleep(20000);
+	         drone->attitude_control(0x4B, 0, 0, -0.25, 0);
+             Send(0,1,1,1,0);
+	         usleep(20000);
+        }
+        else if(x == 0 && y == 0)
+        {
+            Send(0,1,0,0,0);
+            usleep(20000);
         }
         else
         {
             drone->attitude_control(0x4B, error.first, error.second, 0, 0);
+            Send(0,1,1,0,0);
             usleep(20000);   
+        }
         }
 /*	if(drone->rc_channels.pitch > 150)
 		{
@@ -173,17 +213,21 @@ int main(int argc, char *argv[])
              drone->attitude_control(0x4B, 0, 0, 0, 0);
             usleep(20000);
         }	*/
+
     }
     if(once == 1)
     {
        // drone->release_sdk_permission_control();
         once = 0;
+        once_1 = 0;
         I_error_x = 0;
         I_error_y = 0;
+        Send(0,0,0,0,0);
+        usleep(20000);
   //     only_once = 0;
     }
     
-	
+
 /*        switch(main_operate_code)
         {
 			case 1:
